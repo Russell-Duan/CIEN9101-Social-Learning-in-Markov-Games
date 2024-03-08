@@ -1,6 +1,7 @@
 import os
 import json
 import openai
+import pandas as pd
 from dotenv import load_dotenv
 
 
@@ -38,26 +39,28 @@ class DrivingGame:
         self.red_car = Car(3, 1, "red")    # Red car moves along Y
         self._system_prompt_str = _system_prompt_str
         self._user_prompt_str = _user_prompt_str
+        self.output = list()
 
     def play(self):
         time_step = 1
         while True:
             # status at the beginning of the time step
-            print(f"Time Step {time_step}:")
+            self.output.append({"Time_stamp": time_step})
             for my_car in [self.green_car, self.red_car]:
                 if my_car.playing:
-                    print(f"{my_car.color} car: ({my_car.X}, {my_car.Y}), {my_car.reward}")
+                    self.output[time_step - 1][str(my_car.color + "_car_x")] = my_car.X
+                    self.output[time_step - 1][str(my_car.color + "_car_y")] = my_car.Y
+                    self.output[time_step - 1][str(my_car.color + "_car_reward")] = my_car.reward
                     # exit game if needed
                     my_car.playing = (my_car.X != 5) if my_car.color=="green" else (my_car.Y != 5)
-            print('\n')
 
             # check game end
             if self.check_crash():
                 print('Car crash. Game over.')
-                break
+                return self.output, 0
             if not self.green_car.playing and not self.red_car.playing:
                 print(f"Both cars reached the end of the road. Game over.")
-                break
+                return self.output, 1
             if time_step > 10:
                 break
 
@@ -66,9 +69,9 @@ class DrivingGame:
                 if my_car.playing:
                     Move, X_pos, Y_pos = self.get_openai_response(my_car)
                     my_car.queue_update(X_pos, Y_pos, Move)
-                    print(f"{my_car.color} car chose {Move}")
-                else:
-                    print(f"{my_car.color} car has exited")
+                    #print(f"{my_car.color} car chose {Move}")
+                #else:
+                    #print(f"{my_car.color} car has exited")
 
             for my_car in [self.green_car, self.red_car]:
                 if my_car.playing:
@@ -81,7 +84,7 @@ class DrivingGame:
                     else:
                         my_car.set_reward_from_move()
             
-            print('\n')
+            #print('\n')
 
             # increment time
             time_step += 1
@@ -121,7 +124,7 @@ class DrivingGame:
         prompt.append(user_prompt)
         
         # Get AI response
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model='gpt-4',
             messages=prompt,
             temperature=0,
@@ -130,7 +133,7 @@ class DrivingGame:
             frequency_penalty=0.0,
             presence_penalty=0.0
         )
-        rspns_text = response['choices'][0]['message']['content']
+        rspns_text = response.choices[0].message.content
 
         # analyze response
         rspns_list = rspns_text.strip('()').split(',')
@@ -143,12 +146,28 @@ class DrivingGame:
 if __name__ == "__main__":
     # load openai key
     load_dotenv()
-    openai.api_key = os.environ['OPENAI_KEY']
-    
+    openai.api_key = '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'
+
+    df = pd.DataFrame(columns=['Simulation', 'Time_stamp', 'green_car_x', 'green_car_y', 'green_car_reward',
+                               'red_car_x', 'red_car_y', 'red_car_reward'])
+
+
     # load config
-    with open('./intersection/.config') as f:    config = json.load(f)
+    with open('.config') as f:    config = json.load(f)
     _system_prompt_str = config['system']
     _user_prompt_str = config['user']
-    
-    game = DrivingGame(_system_prompt_str, _user_prompt_str)
-    game.play()
+
+    counter = 0
+    for i in range(10):
+        game = DrivingGame(_system_prompt_str, _user_prompt_str)
+        new_rows, success = game.play()
+        print(new_rows)
+        counter += success
+        print(success)
+        for row in new_rows:
+            row['Simulation'] = i+1
+
+        new_df = pd.DataFrame(new_rows)
+        df = pd.concat([df, new_df], ignore_index=True)
+
+    df.to_csv('output.csv', index=False)
