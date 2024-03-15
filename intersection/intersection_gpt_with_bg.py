@@ -41,15 +41,20 @@ class DrivingGame:
         self._myCar_prompt_str = _myCar_prompt_str
         # Number of cars at given coordinates; convenient for checking crash
         self.position_count = defaultdict(int)
+        self.output = list()
 
     def play(self):
         time_step = 1
         while True:
             # status at the beginning of the time step
-            print(f"Time Step {time_step}:")
+            # print(f"Time Step {time_step}:")
+            self.output.append({"Time_stamp": time_step})
             for my_car in self.car_list:
                 if my_car.playing:
-                    print(f"{my_car.color} car: ({my_car.X}, {my_car.Y}), {my_car.reward}")
+                    # print(f"{my_car.color} car: ({my_car.X}, {my_car.Y}), {my_car.reward}")
+                    self.output[time_step - 1][str(my_car.color + "_car_x")] = my_car.X
+                    self.output[time_step - 1][str(my_car.color + "_car_y")] = my_car.Y
+                    self.output[time_step - 1][str(my_car.color + "_car_reward")] = my_car.reward
                     # exit game if needed
                     my_car.playing = (my_car.X != 9) if my_car.color == "green" else (my_car.Y != 9)
             print('\n')
@@ -57,10 +62,10 @@ class DrivingGame:
             # check game end
             if self.check_any_car_crash():
                 print('Car crash. Game over.')
-                break
+                return self.output, 0
             if self.check_all_car_not_playing():
                 print(f"Both green and red cars reached the end of the road. Game over.")
-                break
+                return self.output, 1
             if time_step > 25:
                 break
 
@@ -74,7 +79,8 @@ class DrivingGame:
                         X_pos = my_car.X
                         Y_pos = my_car.Y + 1
                     my_car.queue_update(X_pos, Y_pos, Move)
-                    print(f"{my_car.color} car chose {Move}")
+                    self.output[time_step - 1][str(my_car.color + "_car_decision")] = Move
+                    # print(f"{my_car.color} car chose {Move}")
                 else:
                     print(f"{my_car.color} car has exited")
 
@@ -170,28 +176,25 @@ class DrivingGame:
         Y_pos = int(rspns_list[2])
         return Move, X_pos, Y_pos
 
-
-def simulation(num_of_simulation, game: DrivingGame):
-    load_dotenv()
-    openai.api_key = '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'
+def simulation(output_name: str, num_of_simulation: int, game: DrivingGame):
 
     df = None
 
     # load config
-    with open('.config') as f:
-        config = json.load(f)
+    with open('.config') as f:    config = json.load(f)
     _system_prompt_str = config['system']
-    _user_prompt_str = config['user']
+    _otherCar_prompt_str = config['otherCar']
+    _myCar_prompt_str = config['myCar']
 
     counter = 0
     for i in range(10):
-        game = DrivingGame(_system_prompt_str, _user_prompt_str)
+        game = DrivingGame(_system_prompt_str, _otherCar_prompt_str, _myCar_prompt_str)
         new_rows, success = game.play()
         print(new_rows)
         counter += success
         print(success)
         for row in new_rows:
-            row['Simulation'] = i + 1
+            row['Simulation'] = i+1
 
         new_df = pd.DataFrame(new_rows)
         if df == None:
@@ -199,21 +202,20 @@ def simulation(num_of_simulation, game: DrivingGame):
         else:
             df = pd.concat([df, new_df], ignore_index=True)
 
-    df.to_csv('output.csv', index=False)
+    df.to_csv(output_name + '.csv', index=False)
 
 
 if __name__ == "__main__":
     # load openai key
     load_dotenv()
 
-    openai.api_key = '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'
+    openai.api_key = os.environ['OPENAI_KEY']
 
     # load config
-    with open('.config') as f:
-        config = json.load(f)
+    with open('.config') as f:    config = json.load(f)
     _system_prompt_str = config['system']
     _otherCar_prompt_str = config['otherCar']
     _myCar_prompt_str = config['myCar']
 
     game = DrivingGame(_system_prompt_str, _otherCar_prompt_str, _myCar_prompt_str)
-    game.play()
+    simulation("output_with_bg", 5, game)
