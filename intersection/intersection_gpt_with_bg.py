@@ -3,6 +3,7 @@ import json
 import openai
 from dotenv import load_dotenv
 from collections import defaultdict
+import pandas as pd
 
 
 class Car:
@@ -57,7 +58,7 @@ class DrivingGame:
                     self.output[time_step - 1][str(my_car.color + "_car_reward")] = my_car.reward
                     # exit game if needed
                     my_car.playing = (my_car.X != 9) if my_car.color == "green" else (my_car.Y != 9)
-            print('\n')
+            # print('\n')
 
             # check game end
             if self.check_any_car_crash():
@@ -98,7 +99,7 @@ class DrivingGame:
                     if self.check_crash(my_car):
                         my_car.set_reward_from_crash()
 
-            print('\n')
+            # print('\n')
 
             # increment time
             time_step += 1
@@ -178,7 +179,7 @@ class DrivingGame:
 
 def simulation(output_name: str, num_of_simulation: int, game: DrivingGame):
 
-    df = None
+    df = list()
 
     # load config
     with open('.config') as f:    config = json.load(f)
@@ -187,20 +188,23 @@ def simulation(output_name: str, num_of_simulation: int, game: DrivingGame):
     _myCar_prompt_str = config['myCar']
 
     counter = 0
-    for i in range(10):
+    for i in range(num_of_simulation):
         game = DrivingGame(_system_prompt_str, _otherCar_prompt_str, _myCar_prompt_str)
         new_rows, success = game.play()
         print(new_rows)
+        print('hi')
         counter += success
         print(success)
         for row in new_rows:
             row['Simulation'] = i+1
 
         new_df = pd.DataFrame(new_rows)
-        if df == None:
+        if len(df) == 0:
             df = new_df
         else:
             df = pd.concat([df, new_df], ignore_index=True)
+
+        print(i+1, "-th simulation complete")
 
     df.to_csv(output_name + '.csv', index=False)
 
@@ -209,7 +213,7 @@ if __name__ == "__main__":
     # load openai key
     load_dotenv()
 
-    openai.api_key = os.environ['OPENAI_KEY']
+    openai.api_key = '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'
 
     # load config
     with open('.config') as f:    config = json.load(f)
@@ -218,4 +222,4 @@ if __name__ == "__main__":
     _myCar_prompt_str = config['myCar']
 
     game = DrivingGame(_system_prompt_str, _otherCar_prompt_str, _myCar_prompt_str)
-    simulation("output_with_bg", 5, game)
+    simulation("output_with_bg", 2, game)
